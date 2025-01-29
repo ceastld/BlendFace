@@ -65,9 +65,6 @@ def main():
 	
 		print(f'BlendFace| Positive: {sim_pos:0.4f}, Negative: {sim_neg:0.4f}, Swapped: {sim_swp:0.4f}')
 
-
-
-
 			
 if __name__=='__main__':
 	main()
