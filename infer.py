@@ -75,9 +75,6 @@ class Inference:
         result: Image.Image = toImage(output[0])
         result = self.ffhq_unalign(Image.open(target_img_path), quad, result)
         result.save(save_path)
-        # print(f"Saved to {save_path}")
-        # Image.fromarray((output.permute(0, 2, 3, 1)[0].cpu().data.numpy() * 255).astype(np.uint8)).save(save_path)
-
 
 class BlendFaceDataLoader(ExpDataLoader):
     model = Inference()
