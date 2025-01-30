@@ -9,4 +9,6 @@ __pycache__/
 *.h5
 
 checkpoints/
-examples/
+examples/*
+!examples/1.jpg
+!examples/2.jpg
