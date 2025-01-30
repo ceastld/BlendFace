@@ -102,13 +102,12 @@ def get_box(quad):
     return crop
 
 
-
-
 def image_align(self, src_file, face_landmarks, output_size=256):
     quad, qsize = clac_quad(face_landmarks)
     img = PIL.Image.open(src_file)
     img = img.transform((output_size, output_size), Image.Transform.QUAD, (quad + 0.5).flatten(), Image.Resampling.BILINEAR)
     return img
+
 
 def transform_image_to_quad(src_img: np.ndarray, quad, output_size):
     if not isinstance(src_img, np.ndarray):
@@ -125,12 +124,14 @@ def transform_image_to_quad(src_img: np.ndarray, quad, output_size):
     mask = cv2.erode(mask, kernel, iterations=1)  # 腐蚀操作，收缩掩膜
     return output_img, mask
 
+
 def image_unalign(src_file, face_landmarks, aligned_file: str):
     img = Image.open(src_file)
     quad, qsize = clac_quad(face_landmarks)
     warped, mask = transform_image_to_quad(Image.open(aligned_file), quad, img.size)
     img.paste(Image.fromarray(warped), (0, 0), Image.fromarray(mask))
     return img
+
 
 def get_landmarks(img_path="examples/1.jpg", save_path=None):
     if save_path is None:
