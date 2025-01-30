@@ -102,11 +102,11 @@ def get_box(quad):
     return crop
 
 
-def image_align(self, src_file, face_landmarks, output_size=256):
+def image_align(src_file, face_landmarks, output_size=256):
     quad, qsize = clac_quad(face_landmarks)
     img = PIL.Image.open(src_file)
     img = img.transform((output_size, output_size), Image.Transform.QUAD, (quad + 0.5).flatten(), Image.Resampling.BILINEAR)
-    return img
+    return img, quad
 
 
 def transform_image_to_quad(src_img: np.ndarray, quad, output_size):
@@ -124,6 +124,11 @@ def transform_image_to_quad(src_img: np.ndarray, quad, output_size):
     mask = cv2.erode(mask, kernel, iterations=1)  # 腐蚀操作，收缩掩膜
     return output_img, mask
 
+
+def image_unalign_quad(src_img:Image.Image, quad, aligned_img:Image.Image):
+    warped, mask = transform_image_to_quad(aligned_img, quad, src_img.size)
+    src_img.paste(Image.fromarray(warped), (0, 0), Image.fromarray(mask))
+    return src_img
 
 def image_unalign(src_file, face_landmarks, aligned_file: str):
     img = Image.open(src_file)
@@ -147,7 +152,7 @@ def get_landmarks(img_path="examples/1.jpg", save_path=None):
 
 
 def test_align():
-    img_path = "examples/1.jpg"
+    img_path = "31.jpg"
     img = image_align_ori(img_path, get_landmarks(img_path))
     save_path = os.path.splitext(img_path)[0] + "_aligned.jpg"
     img.save(save_path)
@@ -163,4 +168,4 @@ def test_unalign():
 
 
 if __name__ == "__main__":
-    test_unalign()
+    test_align()

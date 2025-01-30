@@ -10,7 +10,7 @@ import numpy as np
 from expdataloader import *
 from insightface.app import FaceAnalysis
 from insightface.utils import face_align
-from ffhq_align import image_align_ori
+from ffhq_align import image_align, transform_image_to_quad
 
 
 class Inference:
@@ -55,19 +55,25 @@ class Inference:
 
     def ffhq_align(self, img_path):
         ldmkss = self.landmark_detector.get_landmarks(img_path)
-        assert len(ldmkss) == 1, f"Found {len(ldmkss)} faces"
-        img = image_align_ori(img_path, ldmkss[0])
-        return img
-        
+        ldmks = ldmkss[0]
+        return image_align(img_path, ldmks)
+
+    def ffhq_unalign(self, src_img: Image.Image, quad: np.ndarray, aligned_img: Image.Image):
+        warped, mask = transform_image_to_quad(aligned_img, quad, src_img.size)
+        src_img.paste(Image.fromarray(warped), (0, 0), Image.fromarray(mask))
+        return src_img
+
     def swap(self, source_img_path, target_img_path, save_path):
         toTensor = transforms.ToTensor()
         toImage = transforms.ToPILImage()
 
         source_img = toTensor(self.crop_face(source_img_path)).unsqueeze(0).to(self.device)
-        target_img = toTensor(self.ffhq_align(target_img_path)).unsqueeze(0).to(self.device)
+        ffhq_target, quad = self.ffhq_align(target_img_path)
+        target_img = toTensor(ffhq_target).unsqueeze(0).to(self.device)
         with torch.no_grad():
             output = self.swap_model.forward(source_img=source_img, target_img=target_img)
         result: Image.Image = toImage(output[0])
+        result = self.ffhq_unalign(Image.open(target_img_path), quad, result)
         result.save(save_path)
         # print(f"Saved to {save_path}")
         # Image.fromarray((output.permute(0, 2, 3, 1)[0].cpu().data.numpy() * 255).astype(np.uint8)).save(save_path)
@@ -82,56 +88,32 @@ class BlendFaceDataLoader(ExpDataLoader):
     def run_video(self, source_img_path, target_video_path, out_video_path):
         image_loader = self.get_images_loader(target_video_path)
         pid = get_pid(source_img_path)
-        save_dir = get_sub_dir(image_loader.base_dir, f"blendface_{pid}")
-        for target_img_path in tqdm(image_loader.get_image_paths()):
-            target_name = os.path.basename(target_img_path)
-            save_path = os.path.join(save_dir, target_name)
-            self.model.swap(source_img_path, target_img_path, save_path)
-        return self.merge_video(save_dir, out_video_path)
-
-from ffhq_align import image_unalign
-
-class UnAlignProcessor(ExpDataLoader):
-    landmarks_detector = face_alignment.FaceAlignment(face_alignment.LandmarksType.THREE_D, flip_input=False)
-    def __init__(self):
-        super().__init__("blendface_unalign")
-    
-    def get_landmarks(self, img_path):
-        ldmkss = self.landmarks_detector.get_landmarks(img_path)
-        assert len(ldmkss) == 1, f"Found {len(ldmkss)} faces"
-        return ldmkss[0]
-    
-    def run_video(self, source_img_path, target_video_path, out_video_path):
-        image_loader = self.get_images_loader(target_video_path)
-        pid = get_pid(source_img_path)
-        aligned_dir = get_sub_dir(image_loader.base_dir, f"blendface_{pid}")
         unaligned_dir = get_sub_dir(image_loader.base_dir, f"blendface_{pid}/unalign")
         for target_img_path in tqdm(image_loader.get_image_paths()):
             target_name = os.path.basename(target_img_path)
-            aligned_img_path = os.path.join(aligned_dir, target_name)
-            ldmks = self.get_landmarks(target_img_path)
-            result = image_unalign(target_img_path, ldmks, aligned_img_path)
             save_path = os.path.join(unaligned_dir, target_name)
-            result.save(save_path)
+            self.model.swap(source_img_path, target_img_path, save_path)
         return self.merge_video(unaligned_dir, out_video_path)
 
+
+class Test:
+    infer = Inference()
+
+    def swap(self):
+        self.infer.swap("examples/1.jpg", "examples/2.jpg", "examples/1-2.png")
+
+    def crop(self):
+        self.infer.crop_face("examples/0.jpg")
+
+    def align(self):
+        img, quad = self.infer.ffhq_align("examples/0.jpg")
+        img.save("examples/ffhq_aligned.png")
+        print("Saved to examples/ffhq_aligned.png")
+
+
 def main():
-    loader = UnAlignProcessor()
+    loader = BlendFaceDataLoader()
     loader.run_all()
-
-
-def test_swap():
-    Inference().swap("examples/1.jpg", "examples/2.jpg", "examples/1-2.png")
-
-
-def test_crop():
-    Inference().crop_face("examples/0.jpg")
-
-
-def test_ffhq_align():
-    img = Inference().ffhq_align("examples/0.jpg")
-    img.save("examples/ffhq_aligned.png")
-    print("Saved to examples/ffhq_aligned.png")
 
 
 if __name__ == "__main__":
