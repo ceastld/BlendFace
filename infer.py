@@ -10,7 +10,7 @@ import numpy as np
 from expdataloader import *
 from insightface.app import FaceAnalysis
 from insightface.utils import face_align
-from ffhq_align import image_align
+from ffhq_align import image_align_ori
 
 
 class Inference:
@@ -56,9 +56,9 @@ class Inference:
     def ffhq_align(self, img_path):
         ldmkss = self.landmark_detector.get_landmarks(img_path)
         assert len(ldmkss) == 1, f"Found {len(ldmkss)} faces"
-        img = image_align(img_path, ldmkss[0])
+        img = image_align_ori(img_path, ldmkss[0])
         return img
-
+        
     def swap(self, source_img_path, target_img_path, save_path):
         toTensor = transforms.ToTensor()
         toImage = transforms.ToPILImage()
@@ -89,9 +89,34 @@ class BlendFaceDataLoader(ExpDataLoader):
             self.model.swap(source_img_path, target_img_path, save_path)
         return self.merge_video(save_dir, out_video_path)
 
+from ffhq_align import image_unalign
+
+class UnAlignProcessor(ExpDataLoader):
+    landmarks_detector = face_alignment.FaceAlignment(face_alignment.LandmarksType.THREE_D, flip_input=False)
+    def __init__(self):
+        super().__init__("blendface_unalign")
+    
+    def get_landmarks(self, img_path):
+        ldmkss = self.landmarks_detector.get_landmarks(img_path)
+        assert len(ldmkss) == 1, f"Found {len(ldmkss)} faces"
+        return ldmkss[0]
+    
+    def run_video(self, source_img_path, target_video_path, out_video_path):
+        image_loader = self.get_images_loader(target_video_path)
+        pid = get_pid(source_img_path)
+        aligned_dir = get_sub_dir(image_loader.base_dir, f"blendface_{pid}")
+        unaligned_dir = get_sub_dir(image_loader.base_dir, f"blendface_{pid}/unalign")
+        for target_img_path in tqdm(image_loader.get_image_paths()):
+            target_name = os.path.basename(target_img_path)
+            aligned_img_path = os.path.join(aligned_dir, target_name)
+            ldmks = self.get_landmarks(target_img_path)
+            result = image_unalign(target_img_path, ldmks, aligned_img_path)
+            save_path = os.path.join(unaligned_dir, target_name)
+            result.save(save_path)
+        return self.merge_video(unaligned_dir, out_video_path)
 
 def main():
-    loader = BlendFaceDataLoader()
+    loader = UnAlignProcessor()
     loader.run_all()
 
 
